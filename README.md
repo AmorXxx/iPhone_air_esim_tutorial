@@ -1,0 +1,2 @@
+# iPhone_air_esim_tutorial
+让你的外版iPhone Air也能用上国内三大运营商的SIM卡
