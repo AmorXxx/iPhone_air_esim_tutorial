@@ -144,19 +144,39 @@ alsadev=hw:CARD=Android,DEV=0           ; Uncomment if using UAC, set devic
 
 ```bash
 [incoming-mobile]
-exten => sms,1,Verbose(Incoming SMS from ${CALLERID(num)} ${BASE64_DECODE(${SMS_BASE64})})
-;store
-exten => sms,n,System(echo '${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME} - ${CALLERID(num)}: ${BASE64_DECODE(${SMS_BASE64})}' >> /var/log/asterisk/sms.txt)
-;for tg bot use
-;exten => sms,n,System(echo '${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME} - ${CALLERID(num)}\n${BASE64_DECODE(${SMS_BASE64})}' >> /var/log/asterisk/unread_sms/${STRFTIME(${EPOCH},,%Y%m%d%H%M%S)}-${CALLERID(num)}.txt)
-exten => sms,n,Hangup()
 
-exten => ussd,1,Verbose(Incoming USSD: ${BASE64_DECODE(${USSD_BASE64})})
-exten => ussd,n,System(echo '${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME}: ${BASE64_DECODE(${USSD_BASE64})}' >> /var/log/asterisk/ussd.txt)
-exten => ussd,n,Hangup()
+; ---------------- SMS ----------------
+exten => sms,1,NoOp(Incoming SMS from ${CALLERID(num)})
+ same => n,Set(DEC_MSG=${BASE64_DECODE(${SMS_BASE64})})
+ ; 输出日志
+ same => n,Verbose("Incoming SMS from ${CALLERID(num)}: ${DEC_MSG}")
+ ; 追加到主日志文件
+ same => n,Set(LOG_FILE=/var/log/asterisk/sms.txt)
+ same => n,System(echo "${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME} - ${CALLERID(num)}: ${DEC_MSG}" >> ${LOG_FILE})
+ ; 生成单条未读 SMS 文件
+ same => n,Set(UNREAD_DIR=/var/log/asterisk/unread_sms)
+ same => n,Set(UNREAD_FILE=${UNREAD_DIR}/${STRFTIME(${EPOCH},,%Y%m%d%H%M%S)}-${CALLERID(num)}.txt)
+ same => n,System(echo "${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME} - ${CALLERID(num)}\n${DEC_MSG}" >> ${UNREAD_FILE})
+ same => n,Hangup()
 
+; ---------------- USSD ----------------
+exten => ussd,1,NoOp(Incoming USSD)
+ same => n,Set(DEC_USSD=${BASE64_DECODE(${USSD_BASE64})})
+ same => n,Verbose("Incoming USSD: ${DEC_USSD}")
+ same => n,Set(LOG_FILE=/var/log/asterisk/ussd.txt)
+ same => n,System(echo "${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME}: ${DEC_USSD}" >> ${LOG_FILE})
+ same => n,Hangup()
+
+; ---------------- Blocked fake call ----------------
+exten => report,1,Verbose("Incoming report from ${CALLERID(num)}")
+ same => n,Set(UNREAD_FILE=/var/log/asterisk/unread_sms/blocked-calls-${STRFTIME(${EPOCH},,%Y%m%d%H%M%S)}-${CALLERID(num)}.txt)
+ same => n,System(echo "${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - BLOCKED REPORT CALL EXTEN=${EXTEN} CHANNEL=${CHANNEL(name)} CALLERID=${CALLERID(num)}" >> ${UNREAD_FILE})
+ same => n,Hangup()
+
+; ---------------- Default: pass to from-trunk ----------------
 exten => _.,1,Set(CALLERID(name)=${CALLERID(num)})
-exten => _.,n,Goto(from-trunk,${EXTEN},1)
+ same => n,Goto(from-trunk,${EXTEN},1)
+
 ```
 
 短信默认保存到 `/var/log/asterisk/sms.txt`；如果需要转发到 Telegram，就把 ;for tg bot use 下方的一行的注释去掉，并创建`/var/log/asterisk/unread_sms/` 文件夹。
